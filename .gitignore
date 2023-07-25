@@ -1,4 +1,6 @@
-.direnv# Created by https://www.toptal.com/developers/gitignore/api/composer
+!.tmp/.git-keep
+.tmp
+# Created by https://www.toptal.com/developers/gitignore/api/composer
 # Edit at https://www.toptal.com/developers/gitignore?templates=composer
 
 ### Composer ###

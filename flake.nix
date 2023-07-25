@@ -12,46 +12,42 @@
         overlays = [
           (final: prev: {
             php = prev.php82;
-            composer = prev.php82Packages.composer;
+            phpPackages = prev.php82Packages;
+            composer = prev.phpPackages.composer;
           })
         ];
-
-        nginxConfig = pkgs.writeTextFile {
-          name = "nginx.conf";
-          text = ''
-            # Nginx configuration goes here
-            worker_processes auto;
-
-            events {
-              worker_connections 1024;
-            }
-
-            http {
-              access_log off;
-              server {
-                listen 8080;
-                server_name localhost;
-
-                location / {
-                  root ${./public};
-                }
-
-                location ~ \.php$ {
-                  fastcgi_pass 127.0.0.1:9999;
-                  # fastcgi_pass unix:/run/php-fpm.sock;
-                  fastcgi_index index.php;
-                  include ${pkgs.nginx}/conf/fastcgi_params;
-                }
-              }
-            }
-          '';
-        };
 
         pkgs = import nixpkgs { inherit system overlays; };
 
         scripts = with pkgs; [
           (writeScriptBin "setup" ''
             composer install
+          '')
+          (writeScriptBin "start-nginx" ''
+            # set nginx dir for this project
+            nginxDir="$PROJECT_DIR_TMP/nginx"
+
+            # make dir when not exist
+            [[ ! -d "$nginxDir" ]] && mkdir $nginxDir && mkdir "$nginxDir/logs"
+
+            # copy default nginx config from /nix/store to $nginxDir
+            for c in `ls -f ${nginx}/conf/*.default`; do
+            (
+              ${toString "name=\"$\{c%.default\}\""}
+              name="$(basename $name)"
+              to="$nginxDir/$name"
+              cat $c > "$to"
+              # uncomment by line number in nginx.conf
+              [[ "$name" == "nginx.conf" ]] && for N in 2 5 9 21 22 23 25; do
+              (
+                ${gnused}/bin/sed -i "$N s/#//" $to
+              )
+              done
+            )
+            done 
+
+            echo "start nginx"
+            ${nginx}/bin/nginx -p "$nginxDir" -c "nginx.conf" -e "logs/error.log"
           '')
           (writeScriptBin "start" ''
             stop
@@ -73,33 +69,32 @@
 
             # TODO php-fpm run in port 9999
             echo "start nginx in port XXXX"
-            nginx -c ${nginxConfig} -e "$PWD/nginx.error" -g "pid $PWD/nginx.pid;"
+            # nginx -c  -e "$PWD/nginx.error" -g "pid $PWD/nginx.pid;"
           '')
-          (writeScriptBin "stop" ''
-            echo "stop php-fpm in port $FPM_PORT"
-            echo "stop nginx in port XXXX"
-            
-            for pidFile in `ls -f ./*.pid`; do
+
+          (writeScriptBin "stop-nginx" ''
+            for pidFile in `find $PROJECT_DIR_TMP -name "*.pid" -type f`; do
             (
+              echo "Stoping $(basename $pidFile)..."
               kill -9 $(cat $pidFile) > /dev/null 2>&1
-            )
-            done
-            
-            for port in "9999" "8080"; do
-            (
-              lsof -i ":$port" | awk 'NR>1 {print $2}' | xargs kill
+              echo "Stopped $(basename $pidFile)."
+              rm -f $pidFile
             )
             done
           '')
         ];
-      in {
+      in
+      {
         # Development environment output
         devShells.default = pkgs.mkShell {
-          FPM_PORT = 9999;
-
+          PHP_FPM_PORT = 9999;
+          NGINX_PORT = 8080;
           buildInputs = with pkgs; [ php composer nginx ] ++ scripts;
           shellHook = ''
+            export PROJECT_DIR_TMP="$PWD/.tmp";
+            [[ ! -d $PROJECT_DIR_TMP]] && mkdir -p $PROJECT_DIR_TMP
           '';
         };
       });
 }
+
