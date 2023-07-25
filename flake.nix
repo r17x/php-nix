@@ -23,6 +23,11 @@
           (writeScriptBin "setup" ''
             composer install
           '')
+
+          (writeScriptBin "start-phpfpm" ''
+            # TODO
+          '')
+
           (writeScriptBin "start-nginx" ''
             # set nginx dir for this project
             nginxDir="$PROJECT_DIR_TMP/nginx"
@@ -49,6 +54,7 @@
             echo "start nginx"
             ${nginx}/bin/nginx -p "$nginxDir" -c "nginx.conf" -e "logs/error.log"
           '')
+
           (writeScriptBin "start" ''
             stop
             cp ${php}/etc/php-fpm.conf.default $PWD/php-fpm.conf
@@ -76,7 +82,7 @@
             for pidFile in `find $PROJECT_DIR_TMP -name "*.pid" -type f`; do
             (
               echo "Stoping $(basename $pidFile)..."
-              kill -9 $(cat $pidFile) > /dev/null 2>&1
+              kill $(cat $pidFile) > /dev/null 2>&1
               echo "Stopped $(basename $pidFile)."
               rm -f $pidFile
             )
